@@ -2,9 +2,11 @@
   "name": "backend",
   "version": "1.0.0",
   "main": "index.js",
-  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc -b",
+    "watch": "tsc -w",
+    "start": "nodemon dist/index.js",
+    "dev": "concurrently \"npm run watch\" \"npm run start\""
   },
   "keywords": [],
   "author": "",
@@ -15,6 +17,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.19.3",
@@ -23,6 +26,9 @@
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
-    "@types/mongoose": "^5.11.96"
+    "@types/cors": "^2.8.19",
+    "@types/mongoose": "^5.11.96",
+    "concurrently": "^9.2.1",
+    "nodemon": "^3.1.11"
   }
 }

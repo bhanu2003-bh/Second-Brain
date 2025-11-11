@@ -1,19 +1,10 @@
-import mongoose from "mongoose";
-const Schema = mongoose.Schema;
+import mongoose,{model, Schema} from "mongoose";
+import { boolean } from "zod";
 
-const user = new Schema({
-    'email' : {
-        types : String,
-        unique : true,
-        require : true
-    },
-    password : {
-        type : String,
-        unique : true,
-        require : true
-     }
+
+const UserSchema = new Schema({
+    username: {type: String, unique : true},
+    password: String
 })
 
-const Userdb = mongoose.model('User',user);
-
-export default Userdb;
+export const Userdb = model("User", UserSchema);
