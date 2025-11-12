@@ -1,4 +1,4 @@
-import express, { response } from 'express';
+import express, { Request,Response,NextFunction } from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
@@ -6,6 +6,8 @@ import z, { email } from 'zod';
 import bcrypt from 'bcrypt';
 import {Userdb} from './Schemas/User';
 import dotenv from "dotenv";
+import { Contents } from './Schemas/Content';
+import { Tags } from './Schemas/Tags';
 
 
 // importing interface
@@ -14,6 +16,10 @@ import dotenv from "dotenv";
     'error' : string;
 }
 
+//change in class
+interface CustomRequest extends Request{
+ id? : string,
+};
 
 //constants
 const app = express();
@@ -23,6 +29,23 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 dotenv.config();
+
+const auth = (req:CustomRequest,res:Response,next:NextFunction)=>{
+   const token = req.headers.token;
+
+   try {
+       let value : any = jwt.verify(token as string,process.env.JWT_SECRET as string);
+       value.id  =  req.id;
+       next();
+   } catch (error) {
+    res.status(401).json({
+        "message" : "Wrong Token",
+        "error" : error
+    })
+   }
+
+   
+}
 
 
 const port = process.env.PORT || 3000;
@@ -143,6 +166,59 @@ app.post('/api/v1/signin',async(req,res)=>{
        })       
     }
 
+})
+
+
+app.post('/api/v1/content',auth,async(req:CustomRequest,res : Response)=>{
+        const id = req.id;
+
+     const type : string = req.body.type;
+     const link :string = req.body.link;
+      const title : string = req.body.title;
+      const tags : string[] = req.body.tags;
+  
+       const arr = new Set<mongoose.Types.ObjectId>();
+     for(let i = 0;i<tags.length;i++){
+        try {
+            let obj = await Contents.findOne({
+                "title" : tags[i]
+            });
+          if(obj)  arr.add(obj._id);
+        } catch (error) {
+           try {
+              let obj = await Tags.create({
+                'title' : tags[i]
+             })
+             arr.add(obj?._id);
+           } catch (error) {
+              res.status(500).json({
+                'message' : 'Database Issue',
+                'error' : 'Error:'+ error
+              })
+           }
+        }
+     }
+      let newarr : mongoose.Types.ObjectId[] = Array.from(arr);
+
+      try {
+           let value = await Contents.create({
+            'link' : link,
+            'tags' : newarr,
+            'title' : title,
+            'type' : type,
+            'user' : id,
+           })
+
+           res.status(200).json({
+            'message' : 'Successfull',
+            'error' : 'NULL'
+           })
+      } catch (error) {
+          res.json(500).json({
+            'message' : 'Database Error',
+            'error' : "Error:"+error
+          })
+      }
 })
 
 

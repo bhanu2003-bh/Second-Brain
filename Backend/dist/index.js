@@ -20,12 +20,29 @@ const zod_1 = __importDefault(require("zod"));
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const User_1 = require("./Schemas/User");
 const dotenv_1 = __importDefault(require("dotenv"));
+const Content_1 = require("./Schemas/Content");
+const Tags_1 = require("./Schemas/Tags");
+;
 //constants
 const app = (0, express_1.default)();
 // Middlewares
 app.use(express_1.default.json());
 app.use((0, cors_1.default)());
 dotenv_1.default.config();
+const auth = (req, res, next) => {
+    const token = req.headers.token;
+    try {
+        let value = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET);
+        value.id = req.id;
+        next();
+    }
+    catch (error) {
+        res.status(401).json({
+            "message": "Wrong Token",
+            "error": error
+        });
+    }
+};
 const port = process.env.PORT || 3000;
 //MONGO Connect
 const MONGO_URL = process.env.MONGO_URI || "";
@@ -121,6 +138,57 @@ app.post('/api/v1/signin', (req, res) => __awaiter(void 0, void 0, void 0, funct
         res.status(500).json({
             'message': 'Server Side issue',
             'error': 'Error:' + error
+        });
+    }
+}));
+app.post('/api/v1/content', auth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const id = req.id;
+    const type = req.body.type;
+    const link = req.body.link;
+    const title = req.body.title;
+    const tags = req.body.tags;
+    const arr = new Set();
+    for (let i = 0; i < tags.length; i++) {
+        try {
+            let obj = yield Content_1.Contents.findOne({
+                "title": tags[i]
+            });
+            if (obj)
+                arr.add(obj._id);
+        }
+        catch (error) {
+            try {
+                let obj = yield Tags_1.Tags.create({
+                    'title': tags[i]
+                });
+                arr.add(obj === null || obj === void 0 ? void 0 : obj._id);
+            }
+            catch (error) {
+                res.status(500).json({
+                    'message': 'Database Issue',
+                    'error': 'Error:' + error
+                });
+            }
+        }
+    }
+    let newarr = Array.from(arr);
+    try {
+        let value = yield Content_1.Contents.create({
+            'link': link,
+            'tags': newarr,
+            'title': title,
+            'type': type,
+            'user': id,
+        });
+        res.status(200).json({
+            'message': 'Successfull',
+            'error': 'NULL'
+        });
+    }
+    catch (error) {
+        res.json(500).json({
+            'message': 'Database Error',
+            'error': "Error:" + error
         });
     }
 }));
