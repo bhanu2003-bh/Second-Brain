@@ -8,6 +8,8 @@ import {Userdb} from './Schemas/User';
 import dotenv from "dotenv";
 import { Contents } from './Schemas/Content';
 import { Tags } from './Schemas/Tags';
+import { Link } from './Schemas/Link';
+import { uuid,uuidv4,uuidv6 } from 'zod';
 
 
 // importing interface
@@ -35,7 +37,7 @@ const auth = (req:CustomRequest,res:Response,next:NextFunction)=>{
 
    try {
        let value : any = jwt.verify(token as string,process.env.JWT_SECRET as string);
-       value.id  =  req.id;
+       req.id  =  value.id;
        next();
    } catch (error) {
     res.status(401).json({
@@ -176,26 +178,27 @@ app.post('/api/v1/content',auth,async(req:CustomRequest,res : Response)=>{
      const link :string = req.body.link;
       const title : string = req.body.title;
       const tags : string[] = req.body.tags;
-  
+       console.log("Tags :"+tags);
        const arr = new Set<mongoose.Types.ObjectId>();
      for(let i = 0;i<tags.length;i++){
+      console.log("tag:" + tags[i]);
         try {
-            let obj = await Contents.findOne({
+            let obj = await Tags.findOne({
                 "title" : tags[i]
             });
+            
           if(obj)  arr.add(obj._id);
-        } catch (error) {
-           try {
-              let obj = await Tags.create({
+          else{
+               let obj = await Tags.create({
                 'title' : tags[i]
-             })
-             arr.add(obj?._id);
-           } catch (error) {
-              res.status(500).json({
+               })
+               arr.add(obj._id);              
+          }
+        } catch (error) {
+               res.status(500).json({
                 'message' : 'Database Issue',
                 'error' : 'Error:'+ error
-              })
-           }
+               })
         }
      }
       let newarr : mongoose.Types.ObjectId[] = Array.from(arr);
@@ -220,6 +223,164 @@ app.post('/api/v1/content',auth,async(req:CustomRequest,res : Response)=>{
           })
       }
 })
+
+
+
+app.get('/api/v1/content',auth,async(req:CustomRequest,res:Response)=>{
+  const id = req.id;
+
+interface content_interface{
+    "id": string;
+			"type":  string;
+			"link": string;
+			"title": string;
+			"tags": string[];
+}
+
+  const st : content_interface[] = [];
+
+   try {
+    const obj = await Contents.find({
+      'user' : id
+    })
+
+for (let [index, value] of obj.entries()) {
+  const tags_values: string[] = [];
+
+  for (let tagId of value.tags) {
+    try {
+      const a = await Tags.findById(tagId);
+      if (a) tags_values.push(a.title as string);
+    } catch (error) {
+      return res.status(500).json({
+        message: 'DB Crashes',
+        error: error
+      });
+      return;
+    }
+  }
+
+  st.push({
+    id: value.id as string,
+    link: value.link as string,
+    title: value.title as string,
+    type: value.type as string,
+    tags: tags_values
+  });
+}
+
+    res.status(200).json({
+      'message' : "Sucessfull",
+      'content' : st,
+      'error' : 'NULL'
+    })
+   } catch (error) {
+    res.status(500).json({
+      'message' : 'Failed',
+      'error' : 'NULL'
+    })
+   }
+
+})
+
+
+app.delete('/api/v1/content',auth,async(req:CustomRequest,res:Response)=>{
+   const id = req.id;
+     interface delete_interface{ 
+    acknowledged: boolean;
+     deletedCount: number 
+    }
+
+  try {
+      const db_response : delete_interface = await Contents.deleteOne({
+              'user' : id,
+        '_id' : req.body.contentId as string  
+      })
+
+       console.log(db_response.acknowledged +"----"+db_response.deletedCount);
+      if(db_response.deletedCount){
+         res.status(200).json({
+          'message' : 'Deleted Succeed',
+          'error' : 'NULL',
+         })
+      }
+      else{
+        res.status(403).json({
+          'message' : ' Trying to delete a doc you don’t own',
+          'error' : 'not able to delete'
+        })
+      }
+
+  } catch (error) {
+           res.status(500).json({
+          'message' : "Server Issue",
+          'error' : 'Error:'+error
+        })
+  }
+
+})
+
+
+app.post('/api/v1/brain/share',auth,async(req:CustomRequest,res:Response)=>{
+       const id = req.id;
+        const flag = req.body.share;
+
+       try {
+         let db_response = await Link.findOne({
+          'user' : id
+         });
+         if(db_response){
+            if(!flag){
+               await Link.deleteOne({
+                'user' : id,
+               })
+               res.status(200).json({
+                'message' : 'Remove Share Link',
+                'error' : 'NULL'
+               })
+            }
+         }
+         else{
+             const shareId = uuidv4();
+         const shareLink = `https://yourapp.com/share/${shareId}`;
+            let db_response = await Link.create({
+              'link' : shareLink,
+              'user' : id
+            }) 
+            res.status(200).json({
+              'message' : 'Operation sucessed',
+              'link' : shareLink,
+              'error': 'NULL'
+            })
+         }
+       } catch (error) {
+          res.status(200).json({
+             'message' : 'DB Crashes',
+             'error' : 'Error:'+error
+          })
+       }
+})
+
+
+app.post('/api/v1/share/:id',auth,async (req, res) => {
+
+  try {
+    const contenturl = req.params.id;
+      
+    const db_result = await Link.findOne({
+      'link': contenturl
+    });
+    
+    let username = await Userdb.findOne({
+      '_id' : db_result?.user
+    })
+    username : string = username?.username;
+
+
+  } catch (err) {
+    res.status(500).json({ success: false, message: err });
+  }
+});
 
 
 app.listen(port, () => console.log(`Example app listening on port ${port}!`))

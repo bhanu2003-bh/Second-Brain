@@ -22,6 +22,8 @@ const User_1 = require("./Schemas/User");
 const dotenv_1 = __importDefault(require("dotenv"));
 const Content_1 = require("./Schemas/Content");
 const Tags_1 = require("./Schemas/Tags");
+const Link_1 = require("./Schemas/Link");
+const zod_2 = require("zod");
 ;
 //constants
 const app = (0, express_1.default)();
@@ -33,7 +35,7 @@ const auth = (req, res, next) => {
     const token = req.headers.token;
     try {
         let value = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET);
-        value.id = req.id;
+        req.id = value.id;
         next();
     }
     catch (error) {
@@ -147,28 +149,28 @@ app.post('/api/v1/content', auth, (req, res) => __awaiter(void 0, void 0, void 0
     const link = req.body.link;
     const title = req.body.title;
     const tags = req.body.tags;
+    console.log("Tags :" + tags);
     const arr = new Set();
     for (let i = 0; i < tags.length; i++) {
+        console.log("tag:" + tags[i]);
         try {
-            let obj = yield Content_1.Contents.findOne({
+            let obj = yield Tags_1.Tags.findOne({
                 "title": tags[i]
             });
             if (obj)
                 arr.add(obj._id);
-        }
-        catch (error) {
-            try {
+            else {
                 let obj = yield Tags_1.Tags.create({
                     'title': tags[i]
                 });
-                arr.add(obj === null || obj === void 0 ? void 0 : obj._id);
+                arr.add(obj._id);
             }
-            catch (error) {
-                res.status(500).json({
-                    'message': 'Database Issue',
-                    'error': 'Error:' + error
-                });
-            }
+        }
+        catch (error) {
+            res.status(500).json({
+                'message': 'Database Issue',
+                'error': 'Error:' + error
+            });
         }
     }
     let newarr = Array.from(arr);
@@ -190,6 +192,132 @@ app.post('/api/v1/content', auth, (req, res) => __awaiter(void 0, void 0, void 0
             'message': 'Database Error',
             'error': "Error:" + error
         });
+    }
+}));
+app.get('/api/v1/content', auth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const id = req.id;
+    const st = [];
+    try {
+        const obj = yield Content_1.Contents.find({
+            'user': id
+        });
+        for (let [index, value] of obj.entries()) {
+            const tags_values = [];
+            for (let tagId of value.tags) {
+                try {
+                    const a = yield Tags_1.Tags.findById(tagId);
+                    if (a)
+                        tags_values.push(a.title);
+                }
+                catch (error) {
+                    return res.status(500).json({
+                        message: 'DB Crashes',
+                        error: error
+                    });
+                    return;
+                }
+            }
+            st.push({
+                id: value.id,
+                link: value.link,
+                title: value.title,
+                type: value.type,
+                tags: tags_values
+            });
+        }
+        res.status(200).json({
+            'message': "Sucessfull",
+            'content': st,
+            'error': 'NULL'
+        });
+    }
+    catch (error) {
+        res.status(500).json({
+            'message': 'Failed',
+            'error': 'NULL'
+        });
+    }
+}));
+app.delete('/api/v1/content', auth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const id = req.id;
+    try {
+        const db_response = yield Content_1.Contents.deleteOne({
+            'user': id,
+            '_id': req.body.contentId
+        });
+        console.log(db_response.acknowledged + "----" + db_response.deletedCount);
+        if (db_response.deletedCount) {
+            res.status(200).json({
+                'message': 'Deleted Succeed',
+                'error': 'NULL',
+            });
+        }
+        else {
+            res.status(403).json({
+                'message': ' Trying to delete a doc you don’t own',
+                'error': 'not able to delete'
+            });
+        }
+    }
+    catch (error) {
+        res.status(500).json({
+            'message': "Server Issue",
+            'error': 'Error:' + error
+        });
+    }
+}));
+app.post('/api/v1/brain/share', auth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const id = req.id;
+    const flag = req.body.share;
+    try {
+        let db_response = yield Link_1.Link.findOne({
+            'user': id
+        });
+        if (db_response) {
+            if (!flag) {
+                yield Link_1.Link.deleteOne({
+                    'user': id,
+                });
+                res.status(200).json({
+                    'message': 'Remove Share Link',
+                    'error': 'NULL'
+                });
+            }
+        }
+        else {
+            const shareId = (0, zod_2.uuidv4)();
+            const shareLink = `https://yourapp.com/share/${shareId}`;
+            let db_response = yield Link_1.Link.create({
+                'link': shareLink,
+                'user': id
+            });
+            res.status(200).json({
+                'message': 'Operation sucessed',
+                'link': shareLink,
+                'error': 'NULL'
+            });
+        }
+    }
+    catch (error) {
+        res.status(200).json({
+            'message': 'DB Crashes',
+            'error': 'Error:' + error
+        });
+    }
+}));
+app.post('/api/v1/share/:id', auth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const contenturl = req.params.id;
+        const db_result = yield Link_1.Link.findOne({
+            'link': contenturl
+        });
+        let username = yield User_1.Userdb.findOne({
+            '_id': db_result === null || db_result === void 0 ? void 0 : db_result.user
+        });
+        username: string = username === null || username === void 0 ? void 0 : username.username;
+    }
+    catch (err) {
+        res.status(500).json({ success: false, message: err });
     }
 }));
 app.listen(port, () => console.log(`Example app listening on port ${port}!`));
