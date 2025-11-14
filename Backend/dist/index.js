@@ -23,7 +23,6 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const Content_1 = require("./Schemas/Content");
 const Tags_1 = require("./Schemas/Tags");
 const Link_1 = require("./Schemas/Link");
-const zod_2 = require("zod");
 ;
 //constants
 const app = (0, express_1.default)();
@@ -283,17 +282,23 @@ app.post('/api/v1/brain/share', auth, (req, res) => __awaiter(void 0, void 0, vo
                     'error': 'NULL'
                 });
             }
+            else {
+                res.status(200).json({
+                    'message': 'Operation sucessed',
+                    'link': db_response.link,
+                    'error': 'NULL'
+                });
+            }
         }
         else {
-            const shareId = (0, zod_2.uuidv4)();
-            const shareLink = `https://yourapp.com/share/${shareId}`;
+            const shareId = id;
             let db_response = yield Link_1.Link.create({
-                'link': shareLink,
+                'link': id,
                 'user': id
             });
             res.status(200).json({
                 'message': 'Operation sucessed',
-                'link': shareLink,
+                'link': id,
                 'error': 'NULL'
             });
         }
@@ -305,16 +310,61 @@ app.post('/api/v1/brain/share', auth, (req, res) => __awaiter(void 0, void 0, vo
         });
     }
 }));
-app.post('/api/v1/share/:id', auth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.get('/api/v1/share/:id', auth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const contenturl = req.params.id;
         const db_result = yield Link_1.Link.findOne({
             'link': contenturl
         });
-        let username = yield User_1.Userdb.findOne({
+        const user = yield User_1.Userdb.findOne({
             '_id': db_result === null || db_result === void 0 ? void 0 : db_result.user
         });
-        username: string = username === null || username === void 0 ? void 0 : username.username;
+        const username = user === null || user === void 0 ? void 0 : user.username;
+        const id = db_result === null || db_result === void 0 ? void 0 : db_result.user;
+        const st = [];
+        try {
+            const obj = yield Content_1.Contents.find({
+                'user': id
+            });
+            for (let [index, value] of obj.entries()) {
+                const tags_values = [];
+                for (let tagId of value.tags) {
+                    try {
+                        const a = yield Tags_1.Tags.findById(tagId);
+                        if (a)
+                            tags_values.push(a.title);
+                    }
+                    catch (error) {
+                        return res.status(500).json({
+                            message: 'DB Crashes',
+                            error: error
+                        });
+                        return;
+                    }
+                }
+                st.push({
+                    id: value.id,
+                    link: value.link,
+                    title: value.title,
+                    type: value.type,
+                    tags: tags_values
+                });
+            }
+            res.status(200).json({
+                'message': "Sucessfull",
+                'result': {
+                    'username': username,
+                    'content': st
+                },
+                'error': 'NULL'
+            });
+        }
+        catch (error) {
+            res.status(500).json({
+                'message': 'Failed',
+                'error': 'NULL'
+            });
+        }
     }
     catch (err) {
         res.status(500).json({ success: false, message: err });

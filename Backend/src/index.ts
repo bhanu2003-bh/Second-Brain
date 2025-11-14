@@ -9,7 +9,8 @@ import dotenv from "dotenv";
 import { Contents } from './Schemas/Content';
 import { Tags } from './Schemas/Tags';
 import { Link } from './Schemas/Link';
-import { uuid,uuidv4,uuidv6 } from 'zod';
+
+
 
 
 // importing interface
@@ -339,17 +340,25 @@ app.post('/api/v1/brain/share',auth,async(req:CustomRequest,res:Response)=>{
                 'error' : 'NULL'
                })
             }
+            else{
+              res.status(200).json({
+                 'message' : 'Operation sucessed',
+              'link' : db_response.link,
+              'error': 'NULL'
+              })
+            }
          }
          else{
-             const shareId = uuidv4();
-         const shareLink = `https://yourapp.com/share/${shareId}`;
+               
+               const shareId = id;
+        
             let db_response = await Link.create({
-              'link' : shareLink,
+              'link' : id,
               'user' : id
             }) 
             res.status(200).json({
               'message' : 'Operation sucessed',
-              'link' : shareLink,
+              'link' : id,
               'error': 'NULL'
             })
          }
@@ -362,7 +371,7 @@ app.post('/api/v1/brain/share',auth,async(req:CustomRequest,res:Response)=>{
 })
 
 
-app.post('/api/v1/share/:id',auth,async (req, res) => {
+app.get('/api/v1/share/:id',auth,async (req, res) => {
 
   try {
     const contenturl = req.params.id;
@@ -371,10 +380,65 @@ app.post('/api/v1/share/:id',auth,async (req, res) => {
       'link': contenturl
     });
     
-    let username = await Userdb.findOne({
+    const user = await Userdb.findOne({
       '_id' : db_result?.user
     })
-    username : string = username?.username;
+    const username = user?.username;
+   const id  = db_result?.user;
+    interface content_interface{
+    "id": string;
+			"type":  string;
+			"link": string;
+			"title": string;
+			"tags": string[];
+}
+
+  const st : content_interface[] = [];
+
+   try {
+    const obj = await Contents.find({
+      'user' : id
+    })
+
+for (let [index, value] of obj.entries()) {
+  const tags_values: string[] = [];
+
+  for (let tagId of value.tags) {
+    try {
+      const a = await Tags.findById(tagId);
+      if (a) tags_values.push(a.title as string);
+    } catch (error) {
+      return res.status(500).json({
+        message: 'DB Crashes',
+        error: error
+      });
+      return;
+    }
+  }
+
+  st.push({
+    id: value.id as string,
+    link: value.link as string,
+    title: value.title as string,
+    type: value.type as string,
+    tags: tags_values
+  });
+}
+
+    res.status(200).json({
+      'message' : "Sucessfull",
+      'result' : {
+        'username' : username,
+        'content' : st
+      },
+      'error' : 'NULL'
+    })
+   } catch (error) {
+    res.status(500).json({
+      'message' : 'Failed',
+      'error' : 'NULL'
+    })
+   }
 
 
   } catch (err) {
